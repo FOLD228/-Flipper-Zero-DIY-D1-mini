@@ -6,7 +6,6 @@
 #define BUTTON_PIN D3
 Adafruit_SSD1306 display(128, 64, &Wire);
 
-
 void showSplashScreen();
 void drawMenu();
 void handleButton();
@@ -17,10 +16,9 @@ void displayNetworks();
 enum AppState { SPLASH, MAIN_MENU, FUNCTION, WIFI_SCAN };
 AppState currentState = SPLASH;
 
-const char* menuItems[] = {"Wi-Fi Scan", "Show IP", "Test Display", "About"};
+const char* menuItems[] = {"Wi-Fi Scan", "Show IP", "Test Display", "info"};
 int currentMenuItem = 0;
 int menuItemsCount = 4;
-
 
 int networksCount = 0;
 int currentPage = 0;
@@ -28,7 +26,6 @@ int totalPages = 0;
 String ssidList[15];
 int rssiList[15];
 String encryptionTypes[15];
-
 
 unsigned long lastClickTime = 0;
 int clickCount = 0;
@@ -110,7 +107,14 @@ void handleButton() {
         }
         lastClickTime = now;
 
-       
+        
+        if (clickCount >= 3) {
+          currentState = MAIN_MENU;
+          clickCount = 0;
+          drawMenu();
+          return; 
+        }
+
         if (clickCount == 1) {
           if(currentState == MAIN_MENU) {
             currentMenuItem = (currentMenuItem + 1) % menuItemsCount;
@@ -130,17 +134,37 @@ void handleButton() {
             }
           }
         }
-        else if (clickCount >= 3) {
-          currentState = MAIN_MENU;
-          clickCount = 0;
-          drawMenu();
-        }
       }
     }
   }
 }
 
 void runSelectedFunction() {
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setCursor(0, 0);
+
+  switch(currentMenuItem) {
+    case 1: 
+      display.println("IP Address:");
+      display.println(WiFi.localIP());
+      break;
+
+    case 2: 
+      display.setTextSize(2);
+      display.println("Display");
+      display.println("Test OK!");
+      break;
+
+    case 3: //info прошу не удолять!!! остольной код можно редактировать
+      display.println("Flipper Zero DIY");
+      display.println("Created by FOLD"); 
+      display.println("Version 1.1");
+      display.println("https://github.com/FOLD228/-Flipper-Zero-DIY-D1-mini");
+      break;
+  }
+  
+  display.display();
   
 }
 
