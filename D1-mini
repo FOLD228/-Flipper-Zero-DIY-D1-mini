@@ -1,0 +1,206 @@
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <ESP8266WiFi.h>
+
+#define BUTTON_PIN D3
+Adafruit_SSD1306 display(128, 64, &Wire);
+
+
+void showSplashScreen();
+void drawMenu();
+void handleButton();
+void runSelectedFunction();
+void scanWiFiNetworks();
+void displayNetworks();
+
+enum AppState { SPLASH, MAIN_MENU, FUNCTION, WIFI_SCAN };
+AppState currentState = SPLASH;
+
+const char* menuItems[] = {"Wi-Fi Scan", "Show IP", "Test Display", "About"};
+int currentMenuItem = 0;
+int menuItemsCount = 4;
+
+
+int networksCount = 0;
+int currentPage = 0;
+int totalPages = 0;
+String ssidList[15];
+int rssiList[15];
+String encryptionTypes[15];
+
+
+unsigned long lastClickTime = 0;
+int clickCount = 0;
+bool lastButtonState = HIGH;
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  showSplashScreen();
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect();
+}
+
+void loop() {
+  handleButton();
+  
+  switch(currentState) {
+    case SPLASH:
+      if(millis() > 3000) currentState = MAIN_MENU;
+      break;
+      
+    case MAIN_MENU:
+      drawMenu();
+      break;
+      
+    case FUNCTION:
+      runSelectedFunction();
+      break;
+
+    case WIFI_SCAN:
+      displayNetworks();
+      break;
+  }
+}
+
+void showSplashScreen() {
+  display.clearDisplay();
+  display.setTextSize(2);
+  display.setCursor(10, 20);
+  display.print("FLIPPER");
+  display.setCursor(30, 40);
+  display.print("ZERO DIY");
+  display.display();
+}
+
+void drawMenu() {
+  display.clearDisplay();
+  display.setTextSize(1);
+  
+  for(int i = 0; i < menuItemsCount; i++) {
+    display.setCursor(5, i*15 + 5);
+    if(i == currentMenuItem) {
+      display.print("> ");
+      display.setTextColor(BLACK, WHITE);
+    }
+    display.println(menuItems[i]);
+    display.setTextColor(WHITE, BLACK);
+  }
+  display.display();
+}
+
+void handleButton() {
+  static unsigned long lastDebounceTime = 0;
+  bool currentButtonState = digitalRead(BUTTON_PIN);
+
+  if (millis() - lastDebounceTime > 50) {
+    if (currentButtonState != lastButtonState) {
+      lastDebounceTime = millis();
+      lastButtonState = currentButtonState;
+
+      if (currentButtonState == LOW) {
+        unsigned long now = millis();
+        
+        if (now - lastClickTime < 500) {
+          clickCount++;
+        } else {
+          clickCount = 1;
+        }
+        lastClickTime = now;
+
+       
+        if (clickCount == 1) {
+          if(currentState == MAIN_MENU) {
+            currentMenuItem = (currentMenuItem + 1) % menuItemsCount;
+            drawMenu();
+          }
+          else if(currentState == WIFI_SCAN) {
+            currentPage = (currentPage + 1) % totalPages;
+          }
+        }
+        else if (clickCount == 2) {
+          if(currentState == MAIN_MENU) {
+            if(currentMenuItem == 0) {
+              scanWiFiNetworks();
+              currentState = WIFI_SCAN;
+            } else {
+              currentState = FUNCTION;
+            }
+          }
+        }
+        else if (clickCount >= 3) {
+          currentState = MAIN_MENU;
+          clickCount = 0;
+          drawMenu();
+        }
+      }
+    }
+  }
+}
+
+void runSelectedFunction() {
+  
+}
+
+void scanWiFiNetworks() {
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.println("Scanning...");
+  display.display();
+  
+  networksCount = WiFi.scanNetworks();
+  totalPages = ceil(networksCount / 4.0);
+
+  for(int i = 0; i < networksCount && i < 15; i++) {
+    ssidList[i] = WiFi.SSID(i);
+    rssiList[i] = WiFi.RSSI(i);
+    switch(WiFi.encryptionType(i)) {
+      case ENC_TYPE_NONE:
+        encryptionTypes[i] = "Open";
+        break;
+      case ENC_TYPE_WEP:
+        encryptionTypes[i] = "WEP";
+        break;
+      case ENC_TYPE_TKIP:
+        encryptionTypes[i] = "WPA";
+        break;
+      case ENC_TYPE_CCMP:
+        encryptionTypes[i] = "WPA2";
+        break;
+      default:
+        encryptionTypes[i] = "Unknown";
+    }
+  }
+  currentPage = 0;
+}
+
+void displayNetworks() {
+  display.clearDisplay();
+  display.setTextSize(1);
+  
+  display.setCursor(0, 0);
+  display.print("Networks: ");
+  display.print(networksCount);
+  display.print(" (Page ");
+  display.print(currentPage + 1);
+  display.print("/");
+  display.print(totalPages);
+  display.println(")");
+  
+  for(int i = 0; i < 4; i++) {
+    int networkIndex = currentPage * 4 + i;
+    if(networkIndex >= networksCount) break;
+    
+    display.setCursor(0, 16 + i*12);
+    display.print(ssidList[networkIndex].substring(0, 15));
+    display.print(" ");
+    display.print(rssiList[networkIndex]);
+    display.print("dBm");
+    display.setCursor(100, 16 + i*12);
+    display.print(encryptionTypes[networkIndex]);
+  }
+  
+  display.display();
+}
